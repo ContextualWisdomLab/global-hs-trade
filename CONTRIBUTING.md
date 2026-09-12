@@ -2,7 +2,7 @@
 
 Read `AGENTS.md` and the contracts under `docs/` before changing ingestion or aggregation. Keep changes in a feature branch and submit a pull request. Organization-required reviews and workflows still apply; the product CI does not replace them.
 
-Use a Python 3.11+ virtual environment and install `requirements-dev.txt`. Add a failing regression for a behavior change, implement the smallest causal fix, then run:
+Use a Python 3.11+ virtual environment and install the reviewed development artifacts with `python -m pip install --require-hashes --no-deps -r requirements-dev.txt`. Add a failing regression for a behavior change, implement the smallest causal fix, then run:
 
 ```bash
 python scripts/check.py

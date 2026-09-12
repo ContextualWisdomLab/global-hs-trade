@@ -67,7 +67,7 @@ curl 'http://127.0.0.1:8765/v1/trade-stats?hs6=090111&role=exporter&recorded_flo
 python -m venv .venv
 # Linux/macOS: source .venv/bin/activate
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.txt
+python -m pip install --require-hashes --no-deps -r requirements-dev.txt
 python scripts/check.py
 python -W error -m compileall -q global_hs_trade scripts
 python scripts/verify_install.py
