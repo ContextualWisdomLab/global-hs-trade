@@ -30,6 +30,8 @@ python -m global_hs_trade ingest --db var/work.sqlite --file my-authorized-data.
 
 `examples/rights-policy-template.json`의 권한 기본값은 모두 false입니다. 계약·동의로 확보한 범위에 맞춰 등록해야 합니다. 플래그를 true로 바꾸는 행위 자체가 이용권 취득은 아닙니다. CSV 형식은 `examples/mapped-demo.csv`와 `examples/csv-mapping.json`을 참고하십시오.
 
+내장된 실제 원천 정책도 aggregate export를 기본 허용하지 않습니다. 명시적으로 허용된 aggregate export라도 원문 재배포 권한이 없으면 결과에서 행 단위 증거 표본을 제거합니다.
+
 ## 수집과 조회의 경계
 
 | 기능 | 현재 범위 |
@@ -59,7 +61,7 @@ curl 'http://127.0.0.1:8765/v1/dataset-status'
 curl 'http://127.0.0.1:8765/v1/trade-stats?hs6=090111&role=exporter&recorded_flow=X'
 ```
 
-127.0.0.1 단일 사용자 전용입니다. 교차 출처 요청과 쓰기 HTTP 메서드를 허용하지 않습니다. 인터넷에 노출할 인증·멀티테넌트 서비스가 아닙니다.
+127.0.0.1 단일 사용자 전용입니다. 교차 출처 요청과 쓰기 HTTP 메서드를 허용하지 않으며, GET 요청은 SQLite를 읽기 전용으로 열어 스키마나 WAL 파일을 만들지 않습니다. 인터넷에 노출할 인증·멀티테넌트 서비스가 아닙니다.
 
 ## 개발·검증
 
@@ -75,7 +77,7 @@ python scripts/verify_install.py
 
 시험은 pytest를 사용합니다. 테스트 실행기는 외부 pytest 설정과 비사용 플러그인 자동 로딩을 분리하고 Python 경고를 오류로 처리합니다. 설치 검증기는 로컬 wheel을 빌드하고 별도 가상환경에 오프라인 설치한 뒤, 소스 디렉터리 밖에서 조회를 검증합니다. CI는 Python 3.11·3.12·3.13에서 이 절차를 실행하도록 구성했습니다. CI의 성공 여부는 해당 커밋의 실제 실행 결과로 확인해야 합니다.
 
-도메인·입력 계약은 `docs/DESIGN.md`, `docs/DATA_CONTRACT.md`, `docs/CAPTURE_CONTRACT.md`에 있습니다. 이관 내역과 검증 범위는 `docs/REPOSITORY_IMPORT.md`, 구현 제약은 `docs/LIMITATIONS.md`를 참고하십시오.
+도메인·입력 계약은 `docs/DESIGN.md`, `docs/DATA_CONTRACT.md`, `docs/CAPTURE_CONTRACT.md`에 있습니다. 이관 내역과 검증 범위는 `docs/REPOSITORY_IMPORT.md`, 구현 제약은 `docs/LIMITATIONS.md`, 현재 제품·기술 Gap은 `docs/product-technical-gap-baseline.md`를 참고하십시오.
 
 ## 라이선스
 

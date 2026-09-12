@@ -2,9 +2,10 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Iterable
-from .trade.model import normalize_observation, utc_timestamp, hs_code
+from .trade.model import normalize_observation, utc_timestamp
 from .trade.statistics import aggregate, reconcile_records
 
 
@@ -13,14 +14,22 @@ def canonical(value: Any) -> str:
 
 
 class Ledger:
-    def __init__(self,path: str | Path):
+    def __init__(self,path: str | Path, *, read_only: bool=False):
         self.path=Path(path)
-        self.path.parent.mkdir(parents=True,exist_ok=True)
-        self.connection=sqlite3.connect(self.path,timeout=3)
+        self.read_only=read_only
+        if read_only:
+            self.connection=sqlite3.connect(
+                f'file:{self.path.resolve()}?mode=ro',timeout=3,uri=True)
+        else:
+            self.path.parent.mkdir(parents=True,exist_ok=True)
+            self.connection=sqlite3.connect(self.path,timeout=3)
         self.connection.row_factory=sqlite3.Row
         self.connection.execute('PRAGMA foreign_keys=ON')
-        self.connection.execute('PRAGMA journal_mode=WAL')
         self.connection.execute('PRAGMA busy_timeout=3000')
+        if read_only:
+            self.connection.execute('PRAGMA query_only=ON')
+            return
+        self.connection.execute('PRAGMA journal_mode=WAL')
         self.connection.executescript('''
           CREATE TABLE IF NOT EXISTS sources(source_identifier TEXT PRIMARY KEY, configuration TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS observations(
@@ -53,15 +62,17 @@ class Ledger:
         if specification.get('dataset_kind') not in {'real','synthetic'}:
             raise ValueError('source dataset_kind must be real or synthetic')
         rights=specification.get('rights',{})
+        if not isinstance(rights,dict):
+            raise ValueError('source rights must be an object')
         if any(not isinstance(rights.get(k),bool) for k in ['internal_analysis','export_aggregates','redistribute_rows']):
             raise ValueError('each rights flag must explicitly be true or false')
         if not specification.get('rights_basis'):
             raise ValueError('a source-specific rights basis/attestation is required')
-        existing=self.source(identifier,required=False)
-        if existing is not None and canonical(existing)!=canonical(specification):
-            raise ValueError('source already registered with a different policy; do not silently alter entitlements')
         with self.connection:
             self.connection.execute('INSERT OR IGNORE INTO sources VALUES (?,?)',(identifier,canonical(specification)))
+            stored=self.source(identifier)
+            if canonical(stored)!=canonical(specification):
+                raise ValueError('source already registered with a different policy; do not silently alter entitlements')
 
     def source(self,identifier: str,required: bool=True) -> dict[str,Any] | None:
         found=self.connection.execute('SELECT configuration FROM sources WHERE source_identifier=?',(identifier,)).fetchone()
@@ -79,20 +90,13 @@ class Ledger:
             raise PermissionError(f'{identifier}: {right} is not permitted by registered policy')
         return source
 
-    def ingest(self,records: Iterable[dict[str,Any]]) -> dict[str,Any]:
-        outcome={'inserted':0,'replayed':0,'rejected':0,'errors':[]}
-        batch=[]
-        for index,raw in enumerate(records,1):
-            batch.append((index,raw))
-            if len(batch)>=500:
-                self._ingest_batch(batch,outcome);batch=[]
-        if batch:self._ingest_batch(batch,outcome)
-        return outcome
+    def ingest(self,records: Iterable[dict[str,Any]], *, commit: bool=True) -> dict[str,Any]:
+        prepared,failures=self._prepare_ingest(records)
+        return self._write_ingest(prepared,failures,commit=commit)
 
-    def _ingest_batch(self,batch: list,outcome: dict[str,Any]) -> None:
+    def _prepare_ingest(self,records: Iterable[dict[str,Any]]) -> tuple[list,list]:
         prepared=[];failures=[]
-        # Validation and canonical serialization finish before a write transaction opens.
-        for index,raw in batch:
+        for index,raw in enumerate(records,1):
             try:
                 value=normalize_observation(raw)
                 source=self._right(value['source_identifier'],'internal_analysis')
@@ -102,7 +106,11 @@ class Ledger:
                 prepared.append((index,value,digest))
             except (ValueError,PermissionError,TypeError,KeyError) as exc:
                 failures.append((index,raw,str(exc)))
-        with self.connection:
+        return prepared,failures
+
+    def _write_ingest(self,prepared: list,failures: list, *, commit: bool=True) -> dict[str,Any]:
+        outcome={'inserted':0,'replayed':0,'rejected':0,'errors':[]}
+        with (self.connection if commit else nullcontext()):
             for index,value,digest in prepared:
                 params=(value['source_identifier'],value['source_record_identifier'],value['source_version'])
                 old=self.connection.execute('SELECT content_hash FROM observations WHERE source_identifier=? AND source_record_identifier=? AND source_version=?',params).fetchone()
@@ -123,6 +131,7 @@ class Ledger:
                   (utc_timestamp(),source,record,error,digest))
                 outcome['errors'].append({'input_row':index,'source_record_identifier':record,'error':error})
                 outcome['rejected']+=1
+        return outcome
 
     def observations(self,source_identifier: str | None=None,hs6: str | None=None,reporter_country: str | None=None,
                      start: str | None=None,end: str | None=None,recorded_flow: str | None=None,dataset_kind: str | None=None) -> list[dict[str,Any]]:
@@ -160,14 +169,18 @@ class Ledger:
     def issues(self) -> list[dict[str,Any]]:
         return [dict(row) for row in self.connection.execute('SELECT * FROM issues ORDER BY issue_identifier')]
 
-    def record_run(self,receipt: dict[str,Any]) -> None:
-        with self.connection:
+    def record_run(self,receipt: dict[str,Any], *, commit: bool=True) -> None:
+        with (self.connection if commit else nullcontext()):
             self.connection.execute('INSERT INTO runs(created_at,receipt) VALUES (?,?)',(utc_timestamp(),canonical(receipt)))
 
     def runs(self) -> list[dict[str,Any]]:
         return [dict(row)|{'receipt':json.loads(row['receipt'])} for row in self.connection.execute('SELECT * FROM runs ORDER BY run_identifier')]
 
-    def save_baselines(self,records: Iterable[dict[str,Any]]) -> int:
+    def save_baselines(self,records: Iterable[dict[str,Any]], *, commit: bool=True) -> int:
+        prepared=self._prepare_baselines(records)
+        return self._write_baselines(prepared,commit=commit)
+
+    def _prepare_baselines(self,records: Iterable[dict[str,Any]]) -> list:
         from .sources.comtrade import validate_baseline
         prepared=[]
         for record in records:
@@ -177,7 +190,10 @@ class Ledger:
             keyfields={k:record.get(k) for k in ['source_identifier','reporter_country','partner_country','period','recorded_flow','hs6','hs_revision','value_currency','value_basis','customs_code','transport_mode']}
             key=hashlib.sha256(canonical(keyfields).encode()).hexdigest()
             prepared.append((key,record['source_identifier'],record['hs6'],record['period'],canonical(record)))
-        with self.connection:
+        return prepared
+
+    def _write_baselines(self,prepared: list, *, commit: bool=True) -> int:
+        with (self.connection if commit else nullcontext()):
             self.connection.executemany('INSERT INTO baselines VALUES (?,?,?,?,?) ON CONFLICT(baseline_key) DO UPDATE SET payload=excluded.payload',prepared)
         return len(prepared)
 
@@ -196,7 +212,11 @@ class Ledger:
         Path(path).write_text(''.join(canonical(r)+'\n' for r in records),encoding='utf-8')
 
     def export_stats(self,source_identifier: str,path: str | Path) -> None:
-        self._right(source_identifier,'export_aggregates')
-        payload={'scope':'source-qualified observed statics; not complete company trade',
-                 'statistics':self.stats(source_identifier=source_identifier)}
+        source=self._right(source_identifier,'export_aggregates')
+        statistics=self.stats(source_identifier=source_identifier)
+        if not source['rights'].get('redistribute_rows',False):
+            for item in statistics:
+                item.pop('evidence_sample',None)
+        payload={'scope':'source-qualified observed statistics; not complete company trade',
+                 'statistics':statistics}
         Path(path).write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')

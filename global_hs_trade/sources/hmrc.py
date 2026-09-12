@@ -7,7 +7,8 @@ BASE_URL='https://api.uktradeinfo.com/Trade'
 
 
 def build_url(hs6: str,start: str,end: str,flow: str,page_size: int=1000) -> str:
-    if len(hs_code(hs6))!=6:raise ValueError('HMRC query requires HS6')
+    hs6=hs_code(hs6)
+    if len(hs6)!=6:raise ValueError('HMRC query requires HS6')
     start=month(start);end=month(end)
     if start>end:raise ValueError('start month must not follow end month')
     if flow not in {'M','X'}:raise ValueError('flow must be M or X')
@@ -81,6 +82,9 @@ def with_offset(url: str, offset: int) -> str:
 def validate_page(payload: dict, requested_hs6: str, start: str, end: str, flow: str,
                   page_size: int, last_key: list[int] | None, page_url: str) -> tuple[list[dict], list[int] | None, bool]:
     from .http import validate_url
+    requested_hs6 = hs_code(requested_hs6)
+    if len(requested_hs6) != 6:
+        raise ValueError('HMRC query requires HS6')
     rows = parse_page(payload)
     if len(rows) > page_size:
         raise ValueError('HMRC response exceeded the requested page size')

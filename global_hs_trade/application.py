@@ -100,14 +100,17 @@ def fetch_hmrc(ledger: Ledger,hs6: str,start: str,end: str,flow: str,*,max_pages
 
 
 def fetch_comtrade(ledger: Ledger,reporter_code: int,hs6: str,period: str,flow: str,*,client: Any=None) -> dict[str,Any]:
-    url=comtrade.build_url(reporter_code,hs6,period,flow)
+    code=hs_code(hs6)
+    if len(code)!=6:raise ValueError('query requires HS6')
+    url=comtrade.build_url(reporter_code,code,period,flow)
     ledger._right('un-comtrade','internal_analysis')
     receipt={'source_identifier':'un-comtrade','query_url':url,'status':'failed',
        'company_data':False,'national_records_received':0,'records_saved':0}
     client=client or HttpClient()
     try:
         payload=client.get(url)
-        rows=comtrade.parse_page(payload)
+        rows=comtrade.parse_page(payload,reporter_code=reporter_code,hs6=code,
+                                 period=period,flow=flow)
         receipt['national_records_received']=len(rows)
         receipt['records_saved']=ledger.save_baselines(rows)
         receipt['status']=comtrade.receipt_status(len(rows))

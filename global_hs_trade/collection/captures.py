@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from ..sources import hmrc, comtrade
 from ..storage import Ledger, canonical
-from ..trade.model import normalize_observation, utc_timestamp
+from ..trade.model import utc_timestamp
 
 MAX_CAPTURE_BYTES = 16 * 1024 * 1024
 
@@ -40,7 +40,12 @@ def seal_capture(envelope: dict) -> dict:
     return result
 
 
-def _ensure_schema(ledger: Ledger) -> None:
+def _ensure_schema(ledger: Ledger) -> bool:
+    if ledger.read_only:
+        names = {row[0] for row in ledger.connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('captures','capture_observations')")}
+        return names == {'captures', 'capture_observations'}
     statements = '''
         CREATE TABLE IF NOT EXISTS captures (
             capture_identifier TEXT PRIMARY KEY,
@@ -59,6 +64,7 @@ def _ensure_schema(ledger: Ledger) -> None:
     for statement in statements.split(';'):
         if statement.strip():
             ledger.connection.execute(statement)
+    return True
 
 
 def _validate(envelope: Any) -> dict:
@@ -126,43 +132,45 @@ def import_capture(ledger: Ledger, envelope: dict) -> dict:
         rows = comtrade.parse_page(value['payload'])
     else:
         rows = value['payload']
-    _ensure_schema(ledger)
+    if adapter == 'comtrade_preview':
+        prepared_baselines = ledger._prepare_baselines(rows)
+        prepared_ingest = failures = None
+    else:
+        prepared_ingest, failures = ledger._prepare_ingest(rows)
+        prepared_baselines = None
+    # Schema setup is separate from the short import transaction and contains no capture.
+    with ledger.connection:
+        _ensure_schema(ledger)
     with ledger.connection:
         ledger.connection.execute('INSERT OR IGNORE INTO captures VALUES (?,?,?,?)',
             (identifier, value['source_identifier'], value['captured_at'], canonical(value)))
-    if adapter == 'comtrade_preview':
-        saved = ledger.save_baselines(rows)
-        receipt = {'inserted': 0, 'replayed': 0, 'rejected': 0,
-                   'national_records_saved': saved, 'company_records_added': 0}
-    else:
-        receipt = ledger.ingest(rows)
-        links = []
-        # Only an exact accepted version can gain provenance; a conflicting row cannot.
-        for raw in rows:
-            try:
-                normalized = normalize_observation(raw)
-                normalized['dataset_kind'] = source['dataset_kind']
-                digest = payload_digest({k: v for k, v in normalized.items() if k != 'retrieved_at'})
+        if adapter == 'comtrade_preview':
+            saved = ledger._write_baselines(prepared_baselines,commit=False)
+            receipt = {'inserted': 0, 'replayed': 0, 'rejected': 0,
+                       'national_records_saved': saved, 'company_records_added': 0}
+        else:
+            receipt = ledger._write_ingest(prepared_ingest,failures,commit=False)
+            links = []
+            # Only an exact accepted version can gain provenance; a conflicting row cannot.
+            for _, normalized, digest in prepared_ingest:
                 key = (normalized['source_identifier'], normalized['source_record_identifier'], normalized['source_version'])
                 found = ledger.connection.execute('SELECT content_hash FROM observations WHERE '
                     'source_identifier=? AND source_record_identifier=? AND source_version=?', key).fetchone()
                 if found is not None and found[0] == digest:
                     links.append((identifier, *key))
-            except (ValueError, TypeError, KeyError):
-                continue  # Ledger.ingest has already persisted the validation failure.
-        with ledger.connection:
             ledger.connection.executemany('INSERT OR IGNORE INTO capture_observations VALUES (?,?,?,?)', links)
-        receipt['company_records_added'] = receipt['inserted']
-    receipt.update({'capture_identifier': identifier, 'source_identifier': source['source_identifier'],
-        'status': 'imported_with_rejections' if receipt['rejected'] else 'imported',
-        'live_network_request': False, 'population_completeness': 'not_asserted',
-        'authenticity_verified': False})
-    ledger.record_run(receipt)
+            receipt['company_records_added'] = receipt['inserted']
+        receipt.update({'capture_identifier': identifier, 'source_identifier': source['source_identifier'],
+            'status': 'imported_with_rejections' if receipt['rejected'] else 'imported',
+            'live_network_request': False, 'population_completeness': 'not_asserted',
+            'authenticity_verified': False})
+        ledger.record_run(receipt,commit=False)
     return receipt
 
 
 def list_captures(ledger: Ledger, source_identifier: str | None = None) -> list[dict]:
-    _ensure_schema(ledger)
+    if not _ensure_schema(ledger):
+        return []
     if source_identifier is not None:
         ledger._right(source_identifier, 'internal_analysis')
     if source_identifier is None:
@@ -182,7 +190,8 @@ def list_captures(ledger: Ledger, source_identifier: str | None = None) -> list[
 
 def provenance(ledger: Ledger, source_identifier: str, record_identifier: str, version: int | None = None) -> list[dict]:
     ledger._right(source_identifier, 'internal_analysis')
-    _ensure_schema(ledger)
+    if not _ensure_schema(ledger):
+        return []
     if version is None:
         version = ledger.connection.execute('SELECT MAX(source_version) FROM observations WHERE '
             'source_identifier=? AND source_record_identifier=?', (source_identifier, record_identifier)).fetchone()[0]
@@ -196,7 +205,8 @@ def provenance(ledger: Ledger, source_identifier: str, record_identifier: str, v
 
 
 def capture_reference_index(ledger: Ledger, source_identifiers: set[str] | None = None) -> dict[tuple[str, str, int], list[str]]:
-    _ensure_schema(ledger)
+    if not _ensure_schema(ledger):
+        return {}
     result: dict[tuple[str, str, int], list[str]] = {}
     for row in ledger.connection.execute('SELECT * FROM capture_observations ORDER BY capture_identifier'):
         if source_identifiers is not None and row['source_identifier'] not in source_identifiers:

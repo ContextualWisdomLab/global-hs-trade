@@ -19,7 +19,8 @@ def dataset_status(ledger: Ledger) -> dict:
             'observations_without_value': sum(row['value'] is None for row in records),
             'first_period': min(row['period'] for row in records),
             'last_period': max(row['period'] for row in records)})
-    identities = {party['company_identifier'] for row in rows for party in row['parties']}
+    identities = {(row['source_identifier'], party['company_identifier'])
+                  for row in rows for party in row['parties']}
     return {'status': 'observations_present' if rows else 'no_observed_records',
         'active_observations': len(rows), 'real_observations': sum(row['dataset_kind']=='real' for row in rows),
         'synthetic_observations': sum(row['dataset_kind']=='synthetic' for row in rows),
