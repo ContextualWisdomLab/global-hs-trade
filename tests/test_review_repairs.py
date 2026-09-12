@@ -134,6 +134,7 @@ def test_register_source_rejects_non_object_rights_and_post_insert_conflict(tmp_
         def execute(self, *args):
             return None
 
+    ledger.connection.close()
     monkeypatch.setattr(ledger, "connection", IgnoredInsert())
     monkeypatch.setattr(
         ledger,
