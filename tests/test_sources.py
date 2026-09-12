@@ -64,6 +64,11 @@ def test_comtrade_build_url_not_an_invented_paid_endpoint():
     assert '/public/v1/preview/C/A/HS' in url
     assert parse_qs(urlsplit(url).query)['cmdCode']==['090111']
 
+@pytest.mark.parametrize('period',['1800','2101'])
+def test_comtrade_build_url_rejects_year_outside_baseline_contract(period):
+    with pytest.raises(ValueError,match='year outside supported range'):
+        mod('sources.comtrade').build_url(76,'090111',period,'X')
+
 @pytest.mark.parametrize('url',['http://api.uktradeinfo.com/Trade','https://evil.example/Trade',
  'https://api.uktradeinfo.com@evil.example/Trade','https://127.0.0.1/Trade','https://api.uktradeinfo.com:444/Trade'])
 def test_http_and_pagination_reject_unapproved_hosts(url):
