@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tomllib
 
 import pytest
 
@@ -148,3 +149,12 @@ def test_ci_installs_only_hash_pinned_development_dependencies():
         'setuptools==83.0.0 \\',
     ]
     assert requirements.count('--hash=sha256:') == len(package_lines)
+
+
+def test_documented_install_and_build_backend_keep_supply_chain_exact():
+    project = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))
+    install_command = 'python -m pip install --require-hashes --no-deps -r requirements-dev.txt'
+
+    assert all('==' in requirement for requirement in project['build-system']['requires'])
+    assert install_command in (ROOT / 'README.md').read_text(encoding='utf-8')
+    assert install_command in (ROOT / 'CONTRIBUTING.md').read_text(encoding='utf-8')
