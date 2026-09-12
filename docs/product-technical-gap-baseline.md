@@ -1,6 +1,6 @@
 # Product–technical Gap baseline
 
-검증 기준일은 2026-09-12이며, 상태는 보호 브랜치가 아니라 PR #2의 exact head에서 관찰한 증거를 나타냅니다. 미병합 항목은 완료가 아닙니다.
+검증 기준은 2026-09-12 12:19 UTC에 관찰한 PR #2의 입력 head `acfda6aebce5c6a67c95cb3e910c84a01fd123d6`입니다. 이 문서를 포함하는 후속 head는 PR 본문과 GitHub Checks로 별도 결속하며, 미병합 항목은 완료가 아닙니다.
 
 ## Goal과 현재 상태
 

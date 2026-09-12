@@ -13,7 +13,9 @@ def build_url(reporter_code: int,hs6: str,period: str,flow: str) -> str:
         raise ValueError('a positive UN reporter code is required')
     code=hs_code(hs6)
     if len(code)!=6:raise ValueError('query requires HS6')
-    if re.fullmatch(r'\d{4}',period):freq='A'
+    if re.fullmatch(r'\d{4}',period):
+        if not 1900<=int(period)<=2100:raise ValueError('baseline year outside supported range')
+        freq='A'
     else:month(period);freq='M'
     if flow not in {'M','X'}:raise ValueError('flow must be M or X')
     parameters={'reporterCode':reporter_code,'period':period.replace('-',''),'cmdCode':code,'flowCode':flow,
