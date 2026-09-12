@@ -66,7 +66,7 @@ def make_server(path: str | Path,port: int=8765) -> HTTPServer:
                 if parsed.scheme or parsed.netloc:raise ValueError('absolute-form targets are not accepted')
                 values=parse_qs(parsed.query,keep_blank_values=True,max_num_fields=20,strict_parsing=True)
                 if any(len(items)!=1 for items in values.values()):raise ValueError('duplicate parameters are not accepted')
-                with Ledger(path) as ledger:
+                with Ledger(path,read_only=True) as ledger:
                     status,body=dispatch(ledger,parsed.path,{key:items[0] for key,items in values.items()})
                 self.send_json(status,body)
             except (ValueError,UnicodeError) as exc:self.send_json(400,{'status':'invalid_request','message':str(exc)})

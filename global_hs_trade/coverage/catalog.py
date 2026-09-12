@@ -64,5 +64,5 @@ def builtin_sources() -> list[dict[str, Any]]:
        None,'Generated fictitious firms and transactions solely for software testing.'),
     ]
     return [{'source_identifier':identifier,'name':name,'dataset_kind':kind,'documentation_url':url,
-      'rights_basis':rights,'rights':{'internal_analysis':True,'export_aggregates':True,
+      'rights_basis':rights,'rights':{'internal_analysis':True,'export_aggregates':kind=='synthetic',
       'redistribute_rows':kind=='synthetic'}} for identifier,name,kind,url,rights in definitions]
