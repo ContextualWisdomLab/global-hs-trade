@@ -131,3 +131,20 @@ def test_ci_runs_without_write_permissions_or_secrets():
     actions = re.findall(r'uses: ([^\s]+)', text)
     assert len(actions) == 2
     assert all(re.fullmatch(r'actions/[a-z-]+@[0-9a-f]{40}', action) for action in actions)
+
+
+def test_ci_installs_only_hash_pinned_development_dependencies():
+    workflow = (ROOT / '.github' / 'workflows' / 'ci.yml').read_text(encoding='utf-8')
+    requirements = (ROOT / 'requirements-dev.txt').read_text(encoding='utf-8')
+    assert '--require-hashes' in workflow
+    assert '--no-deps' in workflow
+    package_lines = [line for line in requirements.splitlines() if line and not line[0].isspace()]
+    assert package_lines == [
+        'iniconfig==2.1.0 \\',
+        'packaging==25.0 \\',
+        'pluggy==1.6.0 \\',
+        'pygments==2.20.0 \\',
+        'pytest==9.0.3 \\',
+        'setuptools==83.0.0 \\',
+    ]
+    assert requirements.count('--hash=sha256:') == len(package_lines)
