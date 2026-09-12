@@ -12,6 +12,7 @@ Global HS Trade는 적법하게 확보한 기업별 HS 관측을 원천·레코�
 | TRD 역할의 `docs/DESIGN.md`·`docs/DATA_CONTRACT.md`·`docs/CAPTURE_CONTRACT.md` | Proposed | 국가 기준선은 완전한 버전 계보가 없고 대용량 처리 성능은 검증되지 않았습니다. | immutable baseline versioning과 현실적 규모의 성능 시험을 후속 ADR에서 정의합니다. |
 | Context Map 역할의 `docs/DESIGN.md` | Proposed | identity, trade, sources, coverage, storage 경계는 문서화됐지만 독립 배포 계약은 없습니다. | 현재 단일 제품 안의 모듈 경계를 유지하고 반복 책임이 확인되기 전 서비스 분리를 만들지 않습니다. |
 | ERD 근거인 `global_hs_trade/storage.py` schema | Proposed | SQLite 단일 사용자 원장이며 다중 테넌트·복구 SLA·클러스터 운영을 제공하지 않습니다. | 운영 요구가 생기면 source/observation/capture/provenance invariant를 보존한 migration ADR과 fixture를 먼저 추가합니다. |
+| Provenance URL 경계 `global_hs_trade/trade/model.py` | Proposed | URL의 출처 진위나 원격 콘텐츠 자체는 이 필드만으로 검증하지 않습니다. | 관측 저장 전 HTTPS authority를 구조적으로 검사해 host 없는 URL, userinfo/비밀번호, fragment, 잘못된 port를 거부하고, 실제 원천 인증은 capture/provider evidence로 별도 검증합니다. |
 | UML 흐름 근거인 `global_hs_trade/application.py`·`collection/captures.py` | Proposed | 실시간 외부 API 성공은 현재 환경에서 검증되지 않았습니다. | 네트워크·파싱을 transaction 밖에서 수행하고, 요청 범위 검증 후 capture와 receipt를 원자 저장하는 계약을 유지합니다. |
 | PR #2 회귀 및 설치 검증 | Proposed | hosted exact-head Checks와 독립 승인이 아직 필요합니다. | `python scripts/check.py`, `python scripts/verify_install.py`, organization security Checks와 current-head review를 모두 통과한 뒤 ordinary merge합니다. |
 
@@ -19,6 +20,7 @@ Global HS Trade는 적법하게 확보한 기업별 HS 관측을 원천·레코�
 
 - 응답의 신고국·HS6·기간·흐름이 요청과 다르면 저장하지 않고 실패 receipt를 남깁니다.
 - capture 저장 중 provenance 또는 receipt가 실패하면 같은 transaction의 모든 쓰기를 되돌립니다.
+- 정규화 관측의 `source_url`에 인증정보, fragment, host 누락 또는 잘못된 port가 있으면 provenance를 저장하지 않습니다.
 - 권리 객체가 아니거나 기존 source policy와 충돌하면 등록을 거부합니다.
 - 조회 API는 read-only SQLite 연결을 사용합니다. DB가 없거나 손상됐으면 쓰기로 복구하려 하지 않고 요청을 실패시킵니다.
 - 실제 원천 export 권리는 기본 false입니다. aggregate export가 허용돼도 원문 재배포 권리가 없으면 행 단위 evidence sample을 내보내지 않습니다.

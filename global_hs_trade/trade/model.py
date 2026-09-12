@@ -3,6 +3,7 @@ import re
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from typing import Any
+from urllib.parse import urlsplit
 from ..coverage.catalog import country_code
 from ..identity.entities import clean_text, company_key
 
@@ -144,8 +145,14 @@ def normalize_observation(data: dict[str, Any]) -> dict[str, Any]:
     url=data.get('source_url')
     if url is not None:
         url=clean_text(url,'source_url',4096)
-        if not url.startswith('https://'):
-            raise ValueError('source_url must be HTTPS')
+        parsed=urlsplit(url)
+        try:
+            parsed.port
+        except ValueError as exc:
+            raise ValueError('source_url has an invalid port') from exc
+        if (parsed.scheme != 'https' or not parsed.hostname or parsed.username
+                or parsed.password or parsed.fragment):
+            raise ValueError('source_url must be an HTTPS URL without credentials or fragment')
     result['source_url']=url
     result['retrieved_at']=utc_timestamp(data.get('retrieved_at'))
     return result
