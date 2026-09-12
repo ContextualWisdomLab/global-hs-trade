@@ -126,13 +126,23 @@ class Ledger:
 
     def observations(self,source_identifier: str | None=None,hs6: str | None=None,reporter_country: str | None=None,
                      start: str | None=None,end: str | None=None,recorded_flow: str | None=None,dataset_kind: str | None=None) -> list[dict[str,Any]]:
-        predicates=['o.source_version=(SELECT MAX(n.source_version) FROM observations n WHERE n.source_identifier=o.source_identifier AND n.source_record_identifier=o.source_record_identifier)',"o.event_status='active'"]
-        values=[]
-        for field,value in [('source_identifier',source_identifier),('hs6',hs6),('reporter_country',reporter_country),('recorded_flow',recorded_flow)]:
-            if value is not None:predicates.append('o.'+field+'=?');values.append(value)
-        if start:predicates.append('o.period>=?');values.append(start)
-        if end:predicates.append('o.period<=?');values.append(end)
-        rows=self.connection.execute('SELECT o.payload FROM observations o WHERE '+' AND '.join(predicates)+' ORDER BY o.source_identifier,o.source_record_identifier',values)
+        rows=self.connection.execute(
+            '''SELECT o.payload FROM observations o
+               WHERE o.source_version=(
+                   SELECT MAX(n.source_version) FROM observations n
+                   WHERE n.source_identifier=o.source_identifier
+                     AND n.source_record_identifier=o.source_record_identifier
+               )
+                 AND o.event_status='active'
+                 AND (? IS NULL OR o.source_identifier=?)
+                 AND (? IS NULL OR o.hs6=?)
+                 AND (? IS NULL OR o.reporter_country=?)
+                 AND (? IS NULL OR o.recorded_flow=?)
+                 AND (? IS NULL OR o.period>=?)
+                 AND (? IS NULL OR o.period<=?)
+               ORDER BY o.source_identifier,o.source_record_identifier''',
+            (source_identifier,source_identifier,hs6,hs6,reporter_country,reporter_country,
+             recorded_flow,recorded_flow,start,start,end,end))
         result=[]
         for row in rows:
             record=json.loads(row['payload'])
@@ -172,7 +182,10 @@ class Ledger:
         return len(prepared)
 
     def baselines(self,hs6: str | None=None) -> list[dict[str,Any]]:
-        rows=self.connection.execute('SELECT payload FROM baselines'+(' WHERE hs6=?' if hs6 else ''),([hs6] if hs6 else []))
+        if hs6 is None:
+            rows=self.connection.execute('SELECT payload FROM baselines')
+        else:
+            rows=self.connection.execute('SELECT payload FROM baselines WHERE hs6=?',(hs6,))
         records=[json.loads(r[0]) for r in rows]
         for record in records:self._right(record['source_identifier'],'internal_analysis')
         return records
@@ -184,6 +197,6 @@ class Ledger:
 
     def export_stats(self,source_identifier: str,path: str | Path) -> None:
         self._right(source_identifier,'export_aggregates')
-        payload={'scope':'source-qualified observed statistics; not complete company trade',
+        payload={'scope':'source-qualified observed statics; not complete company trade',
                  'statistics':self.stats(source_identifier=source_identifier)}
         Path(path).write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')

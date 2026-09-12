@@ -1,6 +1,6 @@
 {
   "record_type": "local_repository_integration_verification",
-  "observed_at": "2026-09-12T08:01:47.757094+00:00",
+  "observed_at": "2026-09-12T09:05:00+00:00",
   "repository": "ContextualWisdomLab/global-hs-trade",
   "base_commit": "1f7c891c3b86f3e4050d7c14c34d6208f83b6aa7",
   "source_archive_sha256": "f0a9fa183b2eef515480bd20c28a7acd6493b0d950981399b0bd553f8885aa3b",
@@ -10,7 +10,7 @@
     "failed": 0
   },
   "repository_tests": {
-    "passed": 167,
+    "passed": 168,
     "failed": 0,
     "python": "3.13.5",
     "command": "python scripts/check.py",
@@ -30,10 +30,18 @@
     "generated_databases_included": false,
     "fixtures": "synthetic_only"
   },
-  "ci_status": "not_run; source publication blocked by connector safety-state determination failure",
+  "ci_status": "product CI passed on prior full-source head ed8ae805dbca66a66b0cd35422ace641063ca120; org security scans identified dependency and dynamic-SQL findings; this receipt records the locally verified remediation before its hosted rerun",
   "live_upstream_status": "not_verified_external_dns_unavailable",
   "release_created": false,
   "production_deployed": false,
   "note": "This receipt records local evidence; it is not a hosted CI attestation or a coverage claim.",
-  "publication_status": "branch_created_at_original_base; no source commit, pull request or merge published"
+  "publication_status": "PR #2 exists with full source published; this receipt accompanies a follow-up security-remediation commit and does not itself attest the eventual GitHub check results",
+  "security_remediation": {
+    "dependency_fixes": [
+      "pytest 9.0.2 -> 9.0.3",
+      "setuptools 82.0.1 -> 83.0.0"
+    ],
+    "sql_findings": "three execute() calls no longer construct SQL by string concatenation",
+    "regression": "tests/test_sql_safety.py fails on the prior dynamic SQL and passes after the static-query fix"
+  }
 }

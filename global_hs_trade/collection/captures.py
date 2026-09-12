@@ -165,9 +165,13 @@ def list_captures(ledger: Ledger, source_identifier: str | None = None) -> list[
     _ensure_schema(ledger)
     if source_identifier is not None:
         ledger._right(source_identifier, 'internal_analysis')
-    rows = ledger.connection.execute('SELECT capture_identifier, envelope FROM captures'
-        + (' WHERE source_identifier=?' if source_identifier else '') + ' ORDER BY captured_at, capture_identifier',
-        (source_identifier,) if source_identifier else ())
+    if source_identifier is None:
+        rows = ledger.connection.execute(
+            'SELECT capture_identifier, envelope FROM captures ORDER BY captured_at, capture_identifier')
+    else:
+        rows = ledger.connection.execute(
+            'SELECT capture_identifier, envelope FROM captures WHERE source_identifier=? '
+            'ORDER BY captured_at, capture_identifier', (source_identifier,))
     result = []
     for row in rows:
         envelope = json.loads(row['envelope'])
