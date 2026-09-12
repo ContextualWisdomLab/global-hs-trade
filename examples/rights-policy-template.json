@@ -1,0 +1,11 @@
+{
+  "source_identifier": "my-licensed-feed",
+  "name": "User-provided licensed trade records",
+  "dataset_kind": "real",
+  "rights_basis": "Replace this text with the actual supplier contract, permitted purpose and entitlement owner.",
+  "rights": {
+    "internal_analysis": false,
+    "export_aggregates": false,
+    "redistribute_rows": false
+  }
+}

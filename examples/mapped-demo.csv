@@ -1,0 +1,3 @@
+record_id,month,reporting_country,flow,hs,hs_revision,amount,currency,valuation,net_kg,seller_id,seller_name,seller_country
+CSV-DEMO-1,2026-01,BR,X,090111,HS2022,10123.25,USD,FOB,101,fictional-seller-1,SYNTHETIC BR Exporter 1,BR
+CSV-DEMO-2,2026-02,BR,X,090111,HS2022,10246.25,USD,FOB,102,fictional-seller-1,SYNTHETIC BR Exporter 1,BR

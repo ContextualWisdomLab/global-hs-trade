@@ -1,0 +1,39 @@
+{
+  "record_type": "local_repository_integration_verification",
+  "observed_at": "2026-09-12T08:01:47.757094+00:00",
+  "repository": "ContextualWisdomLab/global-hs-trade",
+  "base_commit": "1f7c891c3b86f3e4050d7c14c34d6208f83b6aa7",
+  "source_archive_sha256": "f0a9fa183b2eef515480bd20c28a7acd6493b0d950981399b0bd553f8885aa3b",
+  "source_manifest_verified": 117,
+  "original_archive_tests": {
+    "passed": 156,
+    "failed": 0
+  },
+  "repository_tests": {
+    "passed": 167,
+    "failed": 0,
+    "python": "3.13.5",
+    "command": "python scripts/check.py",
+    "warnings": "errors"
+  },
+  "installation": {
+    "status": "PASS",
+    "wheel": "global_hs_trade-0.2.0-py3-none-any.whl",
+    "isolated_installation": true,
+    "network_required": false,
+    "license_preserved": true,
+    "synthetic_query_verified": true
+  },
+  "redistribution": {
+    "third_party_trade_captures_included": false,
+    "real_company_datasets_included": false,
+    "generated_databases_included": false,
+    "fixtures": "synthetic_only"
+  },
+  "ci_status": "not_run; source publication blocked by connector safety-state determination failure",
+  "live_upstream_status": "not_verified_external_dns_unavailable",
+  "release_created": false,
+  "production_deployed": false,
+  "note": "This receipt records local evidence; it is not a hosted CI attestation or a coverage claim.",
+  "publication_status": "branch_created_at_original_base; no source commit, pull request or merge published"
+}
