@@ -1,6 +1,6 @@
 # Product–technical Gap baseline
 
-검증 기준은 2026-10-01 03:21 UTC에 관찰한 PR #2의 입력 head `f67601cd663abfdba8f44ec500cbde685d16ecb4`입니다. 이 문서를 포함하는 후속 head는 PR 본문과 GitHub Checks로 별도 결속하며, 미병합 항목은 완료가 아닙니다.
+검증 기준은 2026-10-01 20:23 UTC에 관찰한 PR #2의 입력 head `7c61570cb34c47beced93b11b1b08f2e4487fd44`입니다. 이 문서를 포함하는 후속 head는 PR 본문과 GitHub Checks로 별도 결속하며, 미병합 항목은 완료가 아닙니다.
 
 ## Goal과 현재 상태
 
@@ -14,6 +14,7 @@ Global HS Trade는 적법하게 확보한 기업별 HS 관측을 원천·레코�
 | ERD 근거인 `global_hs_trade/storage.py` schema | Proposed | SQLite 단일 사용자 원장이며 다중 테넌트·복구 SLA·클러스터 운영을 제공하지 않습니다. | 운영 요구가 생기면 source/observation/capture/provenance invariant를 보존한 migration ADR과 fixture를 먼저 추가합니다. |
 | Provenance URL 경계 `global_hs_trade/trade/model.py` | Proposed | URL의 출처 진위나 원격 콘텐츠 자체는 이 필드만으로 검증하지 않습니다. | 관측 저장 전 HTTPS authority를 구조적으로 검사해 host 없는 URL, userinfo/비밀번호, fragment, 잘못된 port를 거부하고, 실제 원천 인증은 capture/provider evidence로 별도 검증합니다. |
 | UML 흐름 근거인 `global_hs_trade/application.py`·`collection/captures.py` | Proposed | 실시간 외부 API 성공은 현재 환경에서 검증되지 않았습니다. | 네트워크·파싱을 transaction 밖에서 수행하고, 요청 범위 검증 후 capture와 receipt를 원자 저장하는 계약을 유지합니다. |
+| 로컬 read API `global_hs_trade/server.py`·`tests/test_server_concurrency.py` | Proposed | 표준 라이브러리 request thread 경계는 구현됐지만, 현실적 SQLite 크기에서 각 read path의 k6 p95≤20ms는 아직 실행 증거가 없습니다. | `tests/load/api_read_paths.js`를 현실적 권리·관측 fixture에 실행하고 endpoint별 p95를 기록합니다. 실패하면 query/index/I/O를 profile하며 표본을 축소하지 않습니다. |
 | PR #2 회귀 및 설치 검증 | Proposed | hosted exact-head Checks와 독립 승인이 아직 필요합니다. | `python scripts/check.py`, `python scripts/verify_install.py`, organization security Checks와 current-head review를 모두 통과한 뒤 ordinary merge합니다. |
 
 ## 실패 장면과 운영 행동
@@ -23,5 +24,5 @@ Global HS Trade는 적법하게 확보한 기업별 HS 관측을 원천·레코�
 - 정규화 관측의 `source_url`에 인증정보, fragment, host 누락 또는 잘못된 port가 있으면 provenance를 저장하지 않습니다.
 - 권리 객체가 아니거나 기존 source policy와 충돌하면 등록을 거부합니다.
 - 같은 차원의 국가 기준선 값이 바뀌면 이전 payload를 보존하고 revision을 추가합니다. 같은 내용이나 과거 내용의 replay는 최신 snapshot을 바꾸지 않습니다.
-- 조회 API는 read-only SQLite 연결을 사용합니다. DB가 없거나 손상됐으면 쓰기로 복구하려 하지 않고 요청을 실패시킵니다.
+- 조회 API는 read-only SQLite 연결과 daemon request thread를 사용합니다. 한 reader가 지연돼도 다른 read endpoint를 전역 직렬화하지 않으며, DB가 없거나 손상됐으면 쓰기로 복구하려 하지 않고 요청을 실패시킵니다.
 - 실제 원천 export 권리는 기본 false입니다. aggregate export가 허용돼도 원문 재배포 권리가 없으면 행 단위 evidence sample을 내보내지 않습니다.
