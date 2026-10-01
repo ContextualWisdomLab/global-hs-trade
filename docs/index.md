@@ -8,7 +8,7 @@ The repository contains a proposed v0.2.0 import. It does not include a global c
 
 ## Start here
 
-- [Repository overview](../README.md)
+- [Repository overview](https://github.com/ContextualWisdomLab/global-hs-trade#readme)
 - [Design and bounded contexts](DESIGN.md)
 - [Data contract](DATA_CONTRACT.md)
 - [Evidence capture contract](CAPTURE_CONTRACT.md)
