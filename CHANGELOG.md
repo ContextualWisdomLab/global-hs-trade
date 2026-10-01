@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 국가 기준선의 변경 payload를 불변 `baseline_revision`과 content hash로 보존하고, 멱등 replay·과거 replay 비회귀·legacy snapshot migration·`baselines --history` 조회를 추가했습니다.
 - 정규화 관측의 `source_url`에 사용자정보·비밀번호·fragment·호스트 누락·잘못된 포트가 들어오면 저장 전에 거부해 provenance와 조회 결과에 인증정보가 남지 않도록 했습니다.
 - HMRC와 UN Comtrade 요청에서 점이 포함된 HS6 입력을 정규화하고, Comtrade 응답을 요청한 신고국·HS6·기간·흐름에 결속했습니다.
 - 증거 캡처, 관측·기준선, provenance 연결, 실행 receipt를 하나의 짧은 SQLite transaction으로 저장하도록 수정했습니다. 네트워크와 검증은 transaction 밖에서 수행합니다.
