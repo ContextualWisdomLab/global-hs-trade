@@ -41,10 +41,41 @@ class Ledger:
           CREATE INDEX IF NOT EXISTS observation_slice ON observations(hs6,period,reporter_country,recorded_flow,source_identifier);
           CREATE TABLE IF NOT EXISTS baselines(baseline_key TEXT PRIMARY KEY,source_identifier TEXT NOT NULL REFERENCES sources(source_identifier),
             hs6 TEXT NOT NULL,period TEXT NOT NULL,payload TEXT NOT NULL);
+          CREATE TABLE IF NOT EXISTS baseline_versions(
+            baseline_key TEXT NOT NULL,baseline_revision INTEGER NOT NULL CHECK(baseline_revision>0),
+            baseline_content_hash TEXT NOT NULL,source_identifier TEXT NOT NULL REFERENCES sources(source_identifier),
+            hs6 TEXT NOT NULL,period TEXT NOT NULL,recorded_at TEXT NOT NULL,payload TEXT NOT NULL,
+            PRIMARY KEY(baseline_key,baseline_revision),UNIQUE(baseline_key,baseline_content_hash));
+          CREATE INDEX IF NOT EXISTS baseline_version_slice ON baseline_versions(hs6,period,source_identifier);
           CREATE TABLE IF NOT EXISTS issues(issue_identifier INTEGER PRIMARY KEY,created_at TEXT NOT NULL,
             source_identifier TEXT,source_record_identifier TEXT,error TEXT NOT NULL,payload_hash TEXT);
           CREATE TABLE IF NOT EXISTS runs(run_identifier INTEGER PRIMARY KEY,created_at TEXT NOT NULL,receipt TEXT NOT NULL);
         ''')
+        self._migrate_baseline_snapshots()
+
+    @staticmethod
+    def _baseline_digest(record: dict[str,Any]) -> str:
+        content={key:value for key,value in record.items() if key!='retrieved_at'}
+        return hashlib.sha256(canonical(content).encode()).hexdigest()
+
+    def _migrate_baseline_snapshots(self) -> None:
+        with self.connection:
+            for row in self.connection.execute(
+                    'SELECT baseline_key,source_identifier,hs6,period,payload FROM baselines'):
+                record=json.loads(row['payload'])
+                digest=self._baseline_digest(record)
+                found=self.connection.execute(
+                    'SELECT 1 FROM baseline_versions WHERE baseline_key=? AND baseline_content_hash=?',
+                    (row['baseline_key'],digest)).fetchone()
+                if found is not None:continue
+                revision=self.connection.execute(
+                    'SELECT COALESCE(MAX(baseline_revision),0)+1 FROM baseline_versions WHERE baseline_key=?',
+                    (row['baseline_key'],)).fetchone()[0]
+                recorded_at=record.get('retrieved_at') or utc_timestamp()
+                self.connection.execute(
+                    'INSERT INTO baseline_versions VALUES (?,?,?,?,?,?,?,?)',
+                    (row['baseline_key'],revision,digest,row['source_identifier'],row['hs6'],
+                     row['period'],recorded_at,row['payload']))
 
     def close(self) -> None:
         self.connection.close()
@@ -189,12 +220,28 @@ class Ledger:
             record['dataset_kind']=source['dataset_kind']
             keyfields={k:record.get(k) for k in ['source_identifier','reporter_country','partner_country','period','recorded_flow','hs6','hs_revision','value_currency','value_basis','customs_code','transport_mode']}
             key=hashlib.sha256(canonical(keyfields).encode()).hexdigest()
-            prepared.append((key,record['source_identifier'],record['hs6'],record['period'],canonical(record)))
+            prepared.append((key,record['source_identifier'],record['hs6'],record['period'],
+                             canonical(record),self._baseline_digest(record)))
         return prepared
 
     def _write_baselines(self,prepared: list, *, commit: bool=True) -> int:
         with (self.connection if commit else nullcontext()):
-            self.connection.executemany('INSERT INTO baselines VALUES (?,?,?,?,?) ON CONFLICT(baseline_key) DO UPDATE SET payload=excluded.payload',prepared)
+            for key,source_identifier,hs6,period,payload,digest in prepared:
+                found=self.connection.execute(
+                    'SELECT baseline_revision FROM baseline_versions '
+                    'WHERE baseline_key=? AND baseline_content_hash=?',(key,digest)).fetchone()
+                if found is not None:continue
+                revision=self.connection.execute(
+                    'SELECT COALESCE(MAX(baseline_revision),0)+1 FROM baseline_versions WHERE baseline_key=?',
+                    (key,)).fetchone()[0]
+                record=json.loads(payload)
+                self.connection.execute('INSERT INTO baseline_versions VALUES (?,?,?,?,?,?,?,?)',
+                    (key,revision,digest,source_identifier,hs6,period,
+                     record.get('retrieved_at') or utc_timestamp(),payload))
+                self.connection.execute(
+                    'INSERT INTO baselines VALUES (?,?,?,?,?) '
+                    'ON CONFLICT(baseline_key) DO UPDATE SET payload=excluded.payload',
+                    (key,source_identifier,hs6,period,payload))
         return len(prepared)
 
     def baselines(self,hs6: str | None=None) -> list[dict[str,Any]]:
@@ -204,6 +251,33 @@ class Ledger:
             rows=self.connection.execute('SELECT payload FROM baselines WHERE hs6=?',(hs6,))
         records=[json.loads(r[0]) for r in rows]
         for record in records:self._right(record['source_identifier'],'internal_analysis')
+        return records
+
+    def baseline_history(self,hs6: str | None=None) -> list[dict[str,Any]]:
+        """Return immutable national-baseline revisions in deterministic order."""
+        table=self.connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='baseline_versions'").fetchone()
+        if table is None:
+            records=self.baselines(hs6)
+            for record in records:
+                record['baseline_revision']=1
+                record['baseline_content_hash']=self._baseline_digest(record)
+            return records
+        if hs6 is None:
+            rows=self.connection.execute(
+                'SELECT baseline_revision,baseline_content_hash,payload FROM baseline_versions '
+                'ORDER BY baseline_key,baseline_revision')
+        else:
+            rows=self.connection.execute(
+                'SELECT baseline_revision,baseline_content_hash,payload FROM baseline_versions '
+                'WHERE hs6=? ORDER BY baseline_key,baseline_revision',(hs6,))
+        records=[]
+        for row in rows:
+            record=json.loads(row['payload'])
+            self._right(record['source_identifier'],'internal_analysis')
+            record['baseline_revision']=row['baseline_revision']
+            record['baseline_content_hash']=row['baseline_content_hash']
+            records.append(record)
         return records
 
     def export_rows(self,source_identifier: str,path: str | Path) -> None:

@@ -40,6 +40,7 @@ python -m global_hs_trade ingest --db var/work.sqlite --file my-authorized-data.
 | JSONL·JSON·CSV 입력 | 적법하게 확보한 품목행 자료를 공통 계약으로 받습니다. |
 | HMRC 수집기 | 기업·품목·월의 거래 존재 관측입니다. 거래액이나 선적 수가 아닙니다. 페이지 검증·재개를 지원합니다. |
 | UN Comtrade preview | 국가 집계이며 기업 정보가 아닙니다. 제한 응답을 전수 자료로 표시하지 않습니다. |
+| 국가 기준선 계보 | 같은 차원의 변경 payload를 불변 revision으로 보존하고 최신 snapshot과 history를 분리해 조회합니다. |
 | 증거 캡처 | URL·확인 범위·전사 여부·SHA-256을 관측 버전에 연결합니다. 해시는 세관 원본의 진위 인증이 아닙니다. |
 | 회사 식별 | 출처별 ID 또는 제공된 법인 식별자를 사용합니다. 이름 유사도만으로 합치지 않습니다. |
 | 관측 범위 | 국가 코드 지원과 실제 데이터 확보를 구분합니다. 미관측을 무역 실적 0으로 해석하지 않습니다. |
@@ -52,6 +53,13 @@ python -m global_hs_trade fetch-comtrade --reporter-code 76 --hs6 090111 --perio
 ```
 
 실제 수집에는 연결 가능한 네트워크와 적용 가능한 이용 권한이 필요합니다. HMRC 작업은 같은 조건의 `--resume`로 마지막 승인된 페이지 다음부터 재개합니다. `page_limit_reached`는 완료가 아니며 종료 코드 2입니다. `$skip` 기반 수집은 원천이 동시에 변경될 때 스냅샷 일관성을 보장하지 않습니다. 이관 환경의 외부 DNS 연결 실패 때문에 실시간 수집 성공은 검증하지 못했습니다.
+
+국가 기준선의 최신값과 revision 계보는 별도로 조회합니다.
+
+```bash
+python -m global_hs_trade baselines --db var/work.sqlite --hs6 090111
+python -m global_hs_trade baselines --db var/work.sqlite --hs6 090111 --history
+```
 
 ## 로컬 API
 

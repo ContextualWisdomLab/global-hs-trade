@@ -32,6 +32,7 @@ def parser() -> argparse.ArgumentParser:
         p.add_argument('--'+name)
     p.add_argument('--flow',choices=['M','X']);p.add_argument('--dataset-kind',choices=['real','synthetic'])
     p=command('baselines','Read national totals separately from company data');p.add_argument('--hs6')
+    p.add_argument('--history',action='store_true',help='Include every immutable baseline revision')
     command('sources','Show registered source policies')
     command('dataset-status','Inspect actual observations, not possible geographic coverage')
     p=command('import-capture','Replay a source-bound integrity-checked local evidence capture')
@@ -109,7 +110,9 @@ def main(argv: Sequence[str] | None=None) -> int:
                 emit(query_stats(ledger,hs6=args.hs6,reporter_country=args.reporter,company_country=args.company_country,
                      role=args.role,company=args.company,start=args.start,end=args.end,recorded_flow=args.flow,
                      source_identifier=args.source,dataset_kind=args.dataset_kind));return 0
-            if args.command=='baselines':emit({'record_kind':'national_aggregate','records':ledger.baselines(args.hs6)});return 0
+            if args.command=='baselines':
+                records=ledger.baseline_history(args.hs6) if args.history else ledger.baselines(args.hs6)
+                emit({'record_kind':'national_aggregate','records':records});return 0
             if args.command=='sources':emit({'sources':ledger.sources()});return 0
             if args.command=='audit':emit({'issues':ledger.issues(),'runs':ledger.runs(),'cross_source_matches':ledger.reconcile()});return 0
             if args.command=='export':
