@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit,parse_qs
 from .storage import Ledger
@@ -38,7 +38,7 @@ def dispatch(ledger: Ledger,path: str,parameters: dict[str,str]) -> tuple[int,di
         return 400,{'status':'invalid_request','message':str(exc)}
 
 
-def make_server(path: str | Path,port: int=8765) -> HTTPServer:
+def make_server(path: str | Path,port: int=8765) -> ThreadingHTTPServer:
     if not isinstance(port,int) or not 0<=port<=65535:raise ValueError('invalid port')
     path=Path(path)
     if not path.is_file():raise ValueError('initialize the database before serving')
@@ -74,7 +74,7 @@ def make_server(path: str | Path,port: int=8765) -> HTTPServer:
         def do_POST(self):self.send_json(405,{'status':'read_only'})
         do_PUT=do_POST;do_DELETE=do_POST;do_PATCH=do_POST;do_OPTIONS=do_POST
         def log_message(self,*args):pass
-    return HTTPServer(('127.0.0.1',port),Handler)
+    return ThreadingHTTPServer(('127.0.0.1',port),Handler)
 
 
 def serve(path: str | Path,port: int=8765) -> None:
