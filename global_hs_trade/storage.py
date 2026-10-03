@@ -60,6 +60,8 @@ class Ledger:
 
     def _migrate_baseline_snapshots(self) -> None:
         with self.connection:
+            if not self.connection.in_transaction:
+                self.connection.execute('BEGIN IMMEDIATE')
             for row in self.connection.execute(
                     'SELECT baseline_key,source_identifier,hs6,period,payload FROM baselines'):
                 record=json.loads(row['payload'])
@@ -226,6 +228,8 @@ class Ledger:
 
     def _write_baselines(self,prepared: list, *, commit: bool=True) -> int:
         with (self.connection if commit else nullcontext()):
+            if not self.connection.in_transaction:
+                self.connection.execute('BEGIN IMMEDIATE')
             for key,source_identifier,hs6,period,payload,digest in prepared:
                 found=self.connection.execute(
                     'SELECT baseline_revision FROM baseline_versions '
@@ -260,8 +264,9 @@ class Ledger:
         if table is None:
             records=self.baselines(hs6)
             for record in records:
+                digest=self._baseline_digest(record)
                 record['baseline_revision']=1
-                record['baseline_content_hash']=self._baseline_digest(record)
+                record['baseline_content_hash']=digest
             return records
         if hs6 is None:
             rows=self.connection.execute(
