@@ -1,0 +1,31 @@
+{
+  "source_identifier": "demo-synthetic",
+  "delimiter": ",",
+  "constants": {
+    "source_version": 1,
+    "record_kind": "customs_line",
+    "date_basis": "declaration_month",
+    "hs_code_origin": "declared",
+    "value_origin": "reported",
+    "event_status": "active"
+  },
+  "fields": {
+    "source_record_identifier": "record_id",
+    "period": "month",
+    "reporter_country": "reporting_country",
+    "recorded_flow": "flow",
+    "hs_code": "hs",
+    "hs_revision": "hs_revision",
+    "value": "amount",
+    "value_currency": "currency",
+    "value_basis": "valuation",
+    "net_weight_kg": "net_kg"
+  },
+  "parties": {
+    "exporter": {
+      "external_identifier": "seller_id",
+      "legal_name": "seller_name",
+      "country_code": "seller_country"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "global-hs-trade"
+version = "0.2.0"
+description = "Source-qualified global company-by-HS trade observation ledger"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+license = "MIT"
+license-files = ["LICENSE"]
+
+[project.scripts]
+global-hs-trade = "global_hs_trade.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["global_hs_trade*"]
+
+[tool.setuptools.package-data]
+"global_hs_trade.coverage" = ["countries.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error"]
