@@ -1,7 +1,10 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
 import sqlite3
 import subprocess
 import sys
+import threading
+import time
 
 import pytest
 
@@ -97,12 +100,42 @@ def test_legacy_baseline_snapshot_migrates_to_revision_one(tmp_path):
     connection.commit()
     connection.close()
 
+    with mod("storage").Ledger(path, read_only=True) as legacy:
+        legacy_hash = legacy.baseline_history()[0]["baseline_content_hash"]
+
     with mod("storage").Ledger(path) as migrated:
         history = migrated.baseline_history()
 
     assert history[0]["baseline_revision"] == 1
     assert history[0]["value"] == "100"
-    assert history[0]["baseline_content_hash"]
+    assert history[0]["baseline_content_hash"] == legacy_hash
+
+
+def test_concurrent_baseline_writers_preserve_both_revisions(tmp_path):
+    path = tmp_path / "concurrent.sqlite"
+    with mod("storage").Ledger(path) as database:
+        database.register_source(source())
+
+    start = threading.Barrier(2)
+
+    def write(value):
+        with mod("storage").Ledger(path) as writer:
+            def delay_revision_allocation(statement):
+                if statement.startswith("SELECT COALESCE(MAX(baseline_revision)"):
+                    time.sleep(0.2)
+
+            writer.connection.set_trace_callback(delay_revision_allocation)
+            start.wait(timeout=5)
+            writer.save_baselines([baseline(value=value)])
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(write, ["100", "125"]))
+
+    with mod("storage").Ledger(path, read_only=True) as database:
+        history = database.baseline_history()
+
+    assert [item["baseline_revision"] for item in history] == [1, 2]
+    assert sorted(item["value"] for item in history) == ["100", "125"]
 
 
 def test_cli_exposes_baseline_history(tmp_path):
